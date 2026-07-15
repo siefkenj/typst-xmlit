@@ -17,7 +17,7 @@
 #let made = create-from-relaxng(
   vfs,
   handlers: (
-    "strong": (c, ctx) => ((tag: "alert", attrs: (:), children: (ctx.convert)(c.body)),),
+    "strong": (c, convert, ctx) => ((tag: "alert", attrs: (:), children: convert(c.body)),),
   ),
 )
 

@@ -39,18 +39,18 @@ must render the *same* XML.
 ])
 
 #show-xml(
-  "Math boundaries (opaque placeholder payload)",
+  "Math boundaries (payload evals back to the same expression)",
   p[Inline $x^2$ and display
     $ integral_0^1 x dif x $
     math.],
 )
 
-#let todo-math-p = make-tag("p", handlers: ("math": (body, ctx) => ("TODO: math",)))
+#let todo-math-p = make-tag("p", handlers: ("math": (body, convert, ctx) => ("TODO: math",)))
 #show-xml("Custom math handler", todo-math-p[Euler: $e^(i pi) = -1$])
 
 #let alert-p = make-tag(
   "p",
-  handlers: ("strong": (c, ctx) => ((tag: "alert", attrs: (:), children: (ctx.convert)(c.body)),)),
+  handlers: ("strong": (c, convert, ctx) => ((tag: "alert", attrs: (:), children: convert(c.body)),)),
 )
 #show-xml([Custom markup mapping (strong -> alert)], alert-p[A *very important* point.])
 

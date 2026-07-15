@@ -57,13 +57,21 @@ This mapping can be overwritten by providing `handlers` to the make-tag function
 ```typst
 #let p = make-tag("p", handlers: (
   // strong -> <alert> instead of <b>
-  "strong": (c, ctx) => ((tag: "alert", attrs: (:), children: (ctx.convert)(c.body)),),
-  // serialize equation bodies yourself (the default payload is an
-  // unstable placeholder)
-  "math": (body, ctx) => ("...",),
+  "strong": (c, convert, ctx) => ((tag: "alert", attrs: (:), children: convert(c.body)),),
+  // serialize equation bodies yourself (the default emits Typst math source,
+  // e.g. $x^2$ -> "x^2", verified to eval back to the same expression;
+  // unsupported constructs like matrices panic instead of degrading)
+  "math": (body, convert, ctx) => ("...",),
 ))
 #p[A *very important* point about $x^2$.]
 ```
+
+A handler is called as `handler(element, convert, ctx)`: `convert` turns any
+child value (e.g. the element's body) into an array of XML nodes using the
+same handler table, and `ctx.handlers` is the merged handler table, for
+handlers that delegate to another slot (the built-in `equation` handler
+dispatches to `"math"` this way; the `"math"` slot receives the equation's
+*body* rather than an element).
 
 Unmapped markup (e.g. headings) raises an error naming the element and the
 `handlers:` entry that would map it.

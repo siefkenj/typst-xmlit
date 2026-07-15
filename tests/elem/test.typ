@@ -92,15 +92,49 @@
 #assert.eq(with-math.children.first().tag, "m")
 #assert.eq(with-math.children.last().tag, "md")
 
-// The default math payload is an opaque placeholder; just check it is a
-// non-empty string (its exact form is unstable by design).
+// The default math payload is a best-effort Typst-flavored linear string.
 #let m-node = with-math.children.first()
-#assert.eq(m-node.children.len(), 1)
-#assert(type(m-node.children.first()) == str)
-#assert(m-node.children.first().len() > 0)
+#assert.eq(m-node.children, ("x^2",))
+#assert.eq(with-math.children.last().children, ("y",))
+
+// More of the default math serializer, via xml-to-string.
+#assert.eq(xml-to-string(foo[$x^10$]), "<foo><m>x^10</m></foo>")
+#assert.eq(xml-to-string(foo[$x^(a+1)$]), "<foo><m>x^(a+1)</m></foo>")
+#assert.eq(xml-to-string(foo[$1/2$]), "<foo><m>1/2</m></foo>")
+#assert.eq(xml-to-string(foo[$(x + 1)/2$]), "<foo><m>(x + 1)/2</m></foo>")
+#assert.eq(xml-to-string(foo[$sqrt(x + 1)$]), "<foo><m>sqrt(x + 1)</m></foo>")
+#assert.eq(xml-to-string(foo[$x'_1$]), "<foo><m>x'_1</m></foo>")
+#assert.eq(xml-to-string(foo[$a_(i j)$]), "<foo><m>a_(i j)</m></foo>")
+
+// The round-trip guarantee: eval-ing the serialized output reproduces the
+// original expression exactly. (math-to-string also self-verifies this
+// internally and panics on failure.)
+#import "/src/lib.typ": math-to-string
+#let assert-round-trips(eq) = {
+  let s = math-to-string(eq.body)
+  assert.eq(
+    repr(eval("$" + s + "$").body),
+    repr(eq.body),
+    message: "did not round-trip: " + s,
+  )
+}
+#assert-round-trips($x^2$)
+#assert-round-trips($x^10 + 1.5$)
+#assert-round-trips($(x + 1)/2$)
+#assert-round-trips($sqrt(x + 1)$)
+#assert-round-trips($root(3, x)$)
+#assert-round-trips($pi r^2$)
+#assert-round-trips($x'' _1$)
+#assert-round-trips($e^(i pi) = -1$)
+#assert-round-trips($x dif x$)
+#assert-round-trips($integral_0^1 x^2 dif x$)
+#assert-round-trips($lim_(x -> 0) (sin x)/x$)
+#assert-round-trips($"hello world" + x$)
+#assert-round-trips($f(x, y)$)
+#assert-round-trips($abs(x)$)
 
 // A custom "math" handler replaces the placeholder.
-#let mfoo = make-tag("foo", handlers: ("math": (body, ctx) => ("MATH",)))
+#let mfoo = make-tag("foo", handlers: ("math": (body, convert, ctx) => ("MATH",)))
 #assert.eq(
   xml-to-string(mfoo[$x^2$]),
   "<foo><m>MATH</m></foo>",
@@ -111,7 +145,7 @@
 // Override a built-in mapping: strong -> <alert>.
 #let afoo = make-tag(
   "foo",
-  handlers: ("strong": (c, ctx) => ((tag: "alert", attrs: (:), children: (ctx.convert)(c.body)),)),
+  handlers: ("strong": (c, convert, ctx) => ((tag: "alert", attrs: (:), children: convert(c.body)),)),
 )
 #assert.eq(
   xml-to-string(afoo[*bold*]),
@@ -121,7 +155,7 @@
 // make-tags forwards handlers to every created tag.
 #let (hfoo, hbar) = make-tags(
   "foo", "bar",
-  handlers: ("math": (body, ctx) => ("M",)),
+  handlers: ("math": (body, convert, ctx) => ("M",)),
 )
 #assert.eq(xml-to-string(hfoo(hbar[$x$])), "<foo><bar><m>M</m></bar></foo>")
 
