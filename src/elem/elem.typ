@@ -21,13 +21,19 @@
   ("dif", repr($dif$.body)),
 )
 
-// Recursive serializer for `math-to-string` (which wraps it in a round-trip
-// check). Panics on constructs it cannot faithfully serialize.
-#let _math-serialize(c) = {
+/// Serialize equation (body) content to a Typst math source string:
+/// $x^2$ -> "x^2", $1/2$ -> "1/2", $sqrt(x+1)$ -> "sqrt(x+1)". Symbols
+/// appear as their Unicode characters (e.g. "∫" for `integral`).
+///
+/// For supported constructs the output round-trips: evaluating it as math
+/// (e.g. `eval("$" + s + "$")`) reproduces exactly the original expression
+/// (the property is enforced by the unit tests). Constructs without a
+/// faithful serialization (matrices, cases, alignment points, ...) fall back
+/// to their `repr`, which is visible in the output but is NOT valid math
+/// source -- override the `"math"` handler to serialize those yourself.
+#let math-to-string(c) = {
   if type(c) == str { return c }
-  if type(c) != content {
-    panic("xmlit: cannot serialize " + repr(type(c)) + " inside math: " + repr(c))
-  }
+  if type(c) != content { return repr(c) }
   for (source, form) in _special-math-forms {
     if repr(c) == form { return source }
   }
@@ -63,13 +69,13 @@
   } else if name == "space" {
     " "
   } else if name == "sequence" {
-    join-all(c.children.map(_math-serialize))
+    join-all(c.children.map(math-to-string))
   } else if name == "equation" {
-    _math-serialize(c.fields().body)
+    math-to-string(c.fields().body)
   } else if name == "lr" {
     // Parentheses re-create the lr group when re-parsed; other delimiter
     // pairs (|x|, [x], ...) need the explicit lr(...) form.
-    let inner = _math-serialize(c.fields().body)
+    let inner = math-to-string(c.fields().body)
     if inner.starts-with("(") and inner.ends-with(")") {
       inner
     } else {
@@ -82,55 +88,31 @@
     join-all(range(c.fields().count).map(_ => "'"))
   } else if name == "frac" {
     let f = c.fields()
-    group(_math-serialize(f.num)) + "/" + group(_math-serialize(f.denom))
+    group(math-to-string(f.num)) + "/" + group(math-to-string(f.denom))
   } else if name == "root" {
     let f = c.fields()
     let index = f.at("index", default: none)
     if index == none {
-      "sqrt(" + _math-serialize(f.radicand) + ")"
+      "sqrt(" + math-to-string(f.radicand) + ")"
     } else {
-      "root(" + _math-serialize(index) + ", " + _math-serialize(f.radicand) + ")"
+      "root(" + math-to-string(index) + ", " + math-to-string(f.radicand) + ")"
     }
   } else if name == "attach" {
     let f = c.fields()
-    let s = _math-serialize(f.base)
+    let s = math-to-string(f.base)
     // Primes attach top-right without an operator: $x'$ -> "x'".
     let tr = f.at("tr", default: none)
-    if tr != none { s += _math-serialize(tr) }
+    if tr != none { s += math-to-string(tr) }
     let b = f.at("b", default: none)
-    if b != none { s += "_" + group(_math-serialize(b)) }
+    if b != none { s += "_" + group(math-to-string(b)) }
     let t = f.at("t", default: none)
-    if t != none { s += "^" + group(_math-serialize(t)) }
+    if t != none { s += "^" + group(math-to-string(t)) }
     s
   } else {
-    panic(
-      "xmlit: cannot faithfully serialize math construct `" + name + "`: "
-        + repr(c) + ". Override the \"math\" handler for equations containing it.",
-    )
+    // No faithful serialization known: degrade to repr (visible, but not
+    // valid math source). Override the "math" handler for full control.
+    repr(c)
   }
-}
-
-/// Serialize equation (body) content to a Typst math source string:
-/// $x^2$ -> "x^2", $1/2$ -> "1/2", $sqrt(x+1)$ -> "sqrt(x+1)". Symbols
-/// appear as their Unicode characters (e.g. "∫" for `integral`).
-///
-/// The output is GUARANTEED to round-trip: evaluating it as math (e.g.
-/// `eval("$" + s + "$")`) reproduces exactly the original expression -- the
-/// result is re-parsed and verified before being returned, and constructs
-/// that cannot be faithfully serialized (matrices, cases, alignment
-/// points, ...) panic instead of degrading. Override the `"math"` handler
-/// to serialize those yourself.
-#let math-to-string(c) = {
-  let s = _math-serialize(c)
-  let body = if type(c) == content and repr(c.func()) == "equation" { c.fields().body } else { c }
-  if repr(eval("$" + s + "$").body) != repr(body) {
-    panic(
-      "xmlit: math serialization failed to round-trip: `" + s
-        + "` does not re-evaluate to the original expression "
-        + repr(body) + ". Override the \"math\" handler for this equation.",
-    )
-  }
-  s
 }
 
 /// Built-in handlers that map Typst content elements to XML nodes.

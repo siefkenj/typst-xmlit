@@ -106,9 +106,9 @@
 #assert.eq(xml-to-string(foo[$x'_1$]), "<foo><m>x'_1</m></foo>")
 #assert.eq(xml-to-string(foo[$a_(i j)$]), "<foo><m>a_(i j)</m></foo>")
 
-// The round-trip guarantee: eval-ing the serialized output reproduces the
-// original expression exactly. (math-to-string also self-verifies this
-// internally and panics on failure.)
+// The round-trip property for supported constructs: eval-ing the serialized
+// output reproduces the original expression exactly. This test list is the
+// enforcement of that property -- extend it alongside the serializer.
 #import "/src/lib.typ": math-to-string
 #let assert-round-trips(eq) = {
   let s = math-to-string(eq.body)
@@ -132,6 +132,12 @@
 #assert-round-trips($"hello world" + x$)
 #assert-round-trips($f(x, y)$)
 #assert-round-trips($abs(x)$)
+
+// Unsupported constructs (matrices, cases, ...) do NOT panic; they degrade
+// to a repr fallback, which is visible but not valid math source.
+#let degraded = xml-to-string(foo[$mat(1, 2; 3, 4)$])
+#assert(degraded.starts-with("<foo><m>"))
+#assert(degraded.contains("mat("))
 
 // A custom "math" handler replaces the placeholder.
 #let mfoo = make-tag("foo", handlers: ("math": (body, convert, ctx) => ("MATH",)))

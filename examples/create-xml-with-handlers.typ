@@ -4,7 +4,8 @@
   // strong -> <alert> instead of <b>
   "strong": (c, convert, ctx) => ((tag: "alert", attrs: (:), children: convert(c.body)),),
   // serialize equation bodies yourself (the default emits Typst math source,
-  // e.g. $x^2$ -> "x^2", verified to eval back to the same expression)
+  // e.g. $x^2$ -> "x^2", that evals back to the same expression; unsupported
+  // constructs like matrices degrade to a repr fallback)
   // "math": (body, convert, ctx) => ("...",),
 ))
 
