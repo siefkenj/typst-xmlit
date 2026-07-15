@@ -1,0 +1,20 @@
+# A regex-lite-backed stand-in for `regex`, used via [patch.crates-io] when
+# building the typst-relaxng plugin for wasm32-unknown-unknown.
+#
+# Why: real regex ships large Unicode tables and DFA machinery (several
+# hundred KB of wasm). relaxng-model only uses `Regex::new` + `is_match` for
+# the fixed xsd datatype checks (dateTime, duration, hexBinary, ...) and for
+# user `pattern` facets. regex-lite handles all of the fixed patterns; user
+# patterns using Unicode classes (`\p{...}`) fail loudly at grammar compile
+# time instead of being silently accepted.
+
+[package]
+name = "regex"
+version = "1.9999.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+regex-lite = "0.1"

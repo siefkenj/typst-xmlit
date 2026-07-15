@@ -1,0 +1,3 @@
+[submodule "plugin/relaxng_validator_wasm"]
+	path = plugin/relaxng_validator_wasm
+	url = https://github.com/siefkenj/relaxng_validator_wasm

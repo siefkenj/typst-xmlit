@@ -1,60 +1,27 @@
 // xmlit: Generate XML documents using Typst syntax.
 //
-// Functions created with `make-tag` accept named arguments as XML attributes
-// and positional string arguments as child content.
+// This file only re-exports the package's public API. Implementations live in
+// per-feature modules:
 //
-// Example:
-//   #let foo = make-tag("foo")
-//   #let bar = make-tag("bar")
-//   #foo(bar(baz: "xx"))
-//   // => <foo><bar baz="xx" /></foo>
+//   * elem/elem.typ                    — author XML trees with Typst syntax:
+//                                        tag functions (`make-tag`, `make-tags`,
+//                                        `elem`) usable positionally, in code
+//                                        blocks, and in markup bodies; the
+//                                        content walker (`content-to-children`,
+//                                        `convert`) with its configurable
+//                                        `default-handlers` table.
+//   * xml-to-string/xml-to-string.typ — serialize node trees to an XML string:
+//                                        authored trees as well as faithful
+//                                        re-serialization of the output of
+//                                        Typst's built-in `xml()` reader.
+//   * xml-to-string/make-tag.typ       — `to-xml`, a minimal serializer for
+//                                        plain node dictionaries.
+//   * relaxng/relaxng.typ              — `create-from-relaxng`: derive tag
+//                                        functions from a RELAX NG grammar
+//                                        (compact syntax) and validate the
+//                                        composed document via a WASM plugin.
 
-/// Escape special XML characters in a string value.
-#let xml-escape(s) = {
-  s.replace("&", "&amp;")
-   .replace("<", "&lt;")
-   .replace(">", "&gt;")
-   .replace("\"", "&quot;")
-   .replace("'", "&apos;")
-}
-
-/// Serialize a single XML node (dictionary with `tag`, `attrs`, `children`)
-/// or a plain string to an XML string.
-#let to-xml(node) = {
-  if type(node) == str {
-    return xml-escape(node)
-  }
-
-  let tag = node.tag
-  let attrs = node.at("attrs", default: (:))
-  let children = node.at("children", default: ())
-
-  // Build attribute string
-  let attrs-str = attrs.pairs().map(((k, v)) => {
-    " " + k + "=\"" + xml-escape(str(v)) + "\""
-  }).join("")
-
-  // Serialize children
-  let inner = children.map(to-xml).join("")
-
-  if inner == "" {
-    "<" + tag + attrs-str + " />"
-  } else {
-    "<" + tag + attrs-str + ">" + inner + "</" + tag + ">"
-  }
-}
-
-/// Create a function that produces an XML element with the given tag name.
-/// Named arguments become XML attributes; positional arguments become child
-/// elements (either strings or nodes returned by other `make-tag` functions).
-///
-/// Example:
-///   #let ul = make-tag("ul")
-///   #let li = make-tag("li")
-///   #ul(li("item 1"), li("item 2"))
-///   // => <ul><li>item 1</li><li>item 2</li></ul>
-#let make-tag(tag) = (..args) => {
-  let attrs = args.named()
-  let children = args.positional()
-  (tag: tag, attrs: attrs, children: children)
-}
+#import "elem/elem.typ": default-handlers, convert, content-to-children, make-tag, make-tags, elem
+#import "relaxng/relaxng.typ": create-from-relaxng
+#import "xml-to-string/xml-to-string.typ": esc-text, esc-attr, xml-to-string
+#import "xml-to-string/make-tag.typ": xml-escape, to-xml

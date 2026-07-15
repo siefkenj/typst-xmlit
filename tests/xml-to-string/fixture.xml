@@ -1,0 +1,1 @@
+<root xmlns="urn:default" xmlns:h="urn:html" id="r1" note="a &amp; b &lt;c&gt; &quot;q&quot;"><h:table h:class="tbl"><h:tr><h:td>Apples</h:td><h:td/></h:tr></h:table>Mixed <b>bold</b> text.<!-- c --><![CDATA[<raw> & cdata]]><?pi d?><e z="1" a="2" m="3"/></root>

@@ -9,7 +9,12 @@ categories = ["utility"]
 license = "MIT"
 description = "Generate XML documents using Typst syntax"
 keywords = ["xml", "serialization", "markup"]
-exclude = ["tests"]
+exclude = [
+  "tests",
+  "plugin",
+  "src/elem/elem.test.typ",
+  "src/relaxng/relaxng.test.typ",
+]
 
-[tool.typst-test]
+[tool.tytanic]
 tests = "tests"

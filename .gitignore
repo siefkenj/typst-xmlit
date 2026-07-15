@@ -1,3 +1,8 @@
 *tmp*
 .vscode/
 dist/
+.claude
+# Rust build output (plugin crates)
+target/
+*.wasm
+

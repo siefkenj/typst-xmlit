@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          # The RELAX NG plugin sources live in nested submodules
+          # (plugin/relaxng_validator_wasm -> relaxng-rust).
+          submodules: recursive
+
+      # Build the image from .devcontainer/ and run the build + tests *inside*
+      # the dev container, so CI uses the exact toolchain (Typst 0.15.0, Rust
+      # with the wasm32-unknown-unknown target) developers use locally.
+      - name: Build plugin and run tests in the dev container
+        uses: devcontainers/ci@v0.3
+        with:
+          push: never
+          runCmd: |
+            set -e
+
+            echo "::group::Toolchain versions"
+            typst --version
+            rustc --version
+            cargo --version
+            echo "::endgroup::"
+
+            # "Builds": compile the RELAX NG WASM plugin from source and place
+            # it where the Typst package loads it (src/relaxng/relaxng.wasm).
+            echo "::group::Build RELAX NG WASM plugin"
+            (
+              cd plugin/typst-relaxng
+              cargo build --release --target wasm32-unknown-unknown
+              cp target/wasm32-unknown-unknown/release/typst_relaxng.wasm \
+                 ../../src/relaxng/relaxng.wasm
+            )
+            echo "::endgroup::"
+
+            # "Runs the tests": the tytanic-layout tests under tests/<name>/ are
+            # compile-only (assertion-based), so a plain `typst compile` gates
+            # them. tytanic (`tt`) is not needed in the container.
+            echo "Running Typst test suite"
+            fail=0
+            for t in $(find tests -name test.typ | sort); do
+              if typst compile --root . "$t" /tmp/out.pdf; then
+                echo "PASS  $t"
+              else
+                echo "FAIL  $t"
+                fail=1
+              fi
+            done
+            exit $fail

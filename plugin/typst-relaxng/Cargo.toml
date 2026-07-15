@@ -1,0 +1,44 @@
+# Typst plugin exposing RELAX NG grammar introspection and XML validation.
+# Build with:
+#   cargo build --release --target wasm32-unknown-unknown
+# then copy target/wasm32-unknown-unknown/release/typst_relaxng.wasm into the
+# Typst package (src/relaxng/relaxng.wasm).
+
+[package]
+name = "typst-relaxng"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Standalone: do not join the relaxng_validator_wasm workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+relaxng-validator-wasm = { path = "../relaxng_validator_wasm" }
+relaxng-model = { path = "../relaxng_validator_wasm/relaxng-rust/relaxng-model" }
+# For the fast validation path (bare validator loop, no diagnostics).
+relaxng-validator = { path = "../relaxng_validator_wasm/relaxng-rust/relaxng-validator" }
+xmlparser = "0.13.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = "z"     # optimize aggressively for binary size
+lto = true          # fat LTO: whole-program inlining + dead-code elimination
+codegen-units = 1   # better cross-crate optimization (slower build)
+strip = true        # drop symbol/debug (name) sections
+panic = "abort"     # no unwinding machinery
+
+# Replace chrono with a local parse-only shim: real chrono's default
+# `wasmbind` feature links wasm-bindgen/js-sys imports on
+# wasm32-unknown-unknown, which the Typst plugin runtime cannot provide.
+# The tree's only chrono usage is NaiveDate date parsing (relaxng-model xsd).
+[patch.crates-io]
+chrono = { path = "../chrono-shim" }
+# Replace regex with a regex-lite-backed shim: drops Unicode tables and DFA
+# machinery (~500 KB of wasm). Unicode classes in user `pattern` facets fail
+# loudly at grammar compile time.
+regex = { path = "../regex-shim" }

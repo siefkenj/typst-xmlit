@@ -3,13 +3,22 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
+  "features": {
+    // Rust toolchain (rustup-managed) with the wasm32-unknown-unknown target
+    // for compiling Rust to WASM (e.g. Typst plugins).
+    "ghcr.io/devcontainers/features/rust:1": {
+      "profile": "minimal",
+      "targets": "wasm32-unknown-unknown"
+    }
+  },
   "customizations": {
     "vscode": {
       "extensions": [
         "myriad-dreamin.tinymist",
-        "streetsidesoftware.code-spell-checker"
+        "streetsidesoftware.code-spell-checker",
+        "rust-lang.rust-analyzer"
       ]
     }
   },
-  "postCreateCommand": "typst --version"
+  "postCreateCommand": "typst --version && tt --version && rustc --version && rustup target list --installed"
 }

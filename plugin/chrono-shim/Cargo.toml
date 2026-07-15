@@ -1,0 +1,16 @@
+# A minimal stand-in for `chrono`, used via [patch.crates-io] when building
+# the typst-relaxng plugin for wasm32-unknown-unknown.
+#
+# Why: on that target, real chrono's default `wasmbind` feature links against
+# wasm-bindgen/js-sys imports (`__wbindgen_*`), which the Typst plugin runtime
+# cannot provide. The only chrono API the dependency tree uses is
+# `NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok()`
+# (relaxng-model's xsd date datatype), so this shim implements exactly that.
+
+[package]
+name = "chrono"
+version = "0.4.9999"
+edition = "2021"
+publish = false
+
+[workspace]
