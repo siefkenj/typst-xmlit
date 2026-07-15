@@ -13,7 +13,7 @@
 # Steps:
 #   1. build the RELAX NG WASM plugin (plugin/build.sh) so the vendored
 #      src/relaxng/relaxng.wasm is up to date
-#   2. run the test suite (tytanic unit tests + expected-failure probes)
+#   2. run the test suite (tests/run.sh: unit tests + expected-failure probes)
 #   3. assemble the package (typst.toml, LICENSE, README.md, src/ — no
 #      tests/, plugin/, or *.test.typ files, matching `exclude` in
 #      typst.toml); the README's relative links (which only work when
@@ -129,17 +129,9 @@ TREE_BASE="$REPO_URL/tree/$GITHUB_REF"
 echo "==> Building the RELAX NG WASM plugin"
 plugin/build.sh
 
-echo "==> Running the test suite"
-tt run --no-fail-fast
-
-echo "==> Checking expected-failure probes"
-for f in tests/expect-fail/*.typ; do
-    if typst compile --root . -f pdf "$f" /dev/null 2>/dev/null; then
-        echo "error: expected to fail but compiled cleanly: $f" >&2
-        exit 1
-    fi
-    echo "  ok (fails as expected): $f"
-done
+echo "==> Running tests"
+# tests/run.sh compiles the unit tests and checks the expected-failure probes.
+./tests/run.sh
 
 echo "==> Assembling $PKG/"
 rm -rf dist

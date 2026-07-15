@@ -5,44 +5,54 @@ Tools for generating, validating, and outputting XML using Typst syntax.
 ## Authoring XML
 
 Create functions which return XML elements with `make-tag`/`make-tags`.
-Use the resulting functions using standard typst syntax.
+Use the resulting functions using standard typst syntax. Named arguments are converted to attributes and positional arguments
+are treated as children.
 
 ```typst
 #import "@preview/xmlit:0.1.0": make-tags, xml-to-string
 
 #{
   let (foo, bar) = make-tags("foo", "bar")
-  
+
+  // Typst native XML parsing
+  let xml1 = xml(bytes(`<foo><bar baz="zz" />text</foo>`.text))
+
+  // Construct XML by passing using function arguments
+  let xml2 = foo(bar(baz: "zz"), "text")
+
+  // Construct XML by passing using a code block
+  let xml3 = foo({
+    bar(baz: "zz")
+    "text"
+  })
+
+  // Construct XML by passing content
+  let xml4 = foo[#bar(baz: "zz")text]
+
+  [
+    // All versions render as `<foo><bar baz="zz" />text</foo>`
+    #xml-to-string(xml1)
+
+    #xml-to-string(xml2)
+
+    #xml-to-string(xml3)
+
+    #xml-to-string(xml4)
+  ]
 }
-
-// Positional
-#xml-to-string(foo(bar(baz: "zz"), "text"))
-
-// Code block
-#xml-to-string(foo({
-  bar(baz: "zz")
-  "text"
-}))
-
-// Markup body
-#xml-to-string(foo[#bar(baz: "zz")text])
-
-// All three => <foo><bar baz="zz" />text</foo>
 ```
-
-Named arguments become attributes; positional arguments (strings, other tag
-calls, arrays, numbers, or content) become children. `elem("foo", ...)` is a
-generic one-off constructor in the spirit of `html.elem`.
 
 ### Markup in bodies
 
-Inside a `[...]` body, ordinary Typst markup is mapped to XML by a built-in
-handler table (in the spirit of Typst's HTML export): `*bold*` → `<b>`,
-`_emph_` → `<em>`, `` `code` `` → `<c>`/`<pre>`, smart quotes → plain quote
-characters. Inline math `$x^2$` becomes `<m>…</m>` and display math
-`$ ... $` becomes `<md>…</md>`.
+Inside content (`[...]` blocks) markup is automatically converted into tags:
 
-Every mapping is configurable per tag factory:
+ - `*bold*` → `<b>bold</b>`
+ - `_emph_` → `<em>emph</em>`
+ - `` `code` `` → `<c>code</c>`
+ - `$x^2$` → `<m>x^2</m>`
+ - `$ ... $` → `<md>…</md>`
+
+This mapping can be overwritten by providing `handlers` to the make-tag function.
 
 ```typst
 #let p = make-tag("p", handlers: (

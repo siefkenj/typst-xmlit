@@ -1,8 +1,11 @@
 # plugin/ — the RELAX NG WASM plugin
 
 Rust sources for the Typst plugin behind `create-from-relaxng`. The compiled
-artifact is committed at `src/relaxng/relaxng.wasm`, so Typst users never need
-this directory; it only matters when changing the plugin.
+artifact is built by `plugin/build.sh` to `src/relaxng/relaxng.wasm` (git-ignored,
+not committed) and bundled into the published package by `make_dist.sh`; CI
+builds it and hands it to the test job as an artifact. Typst users of the
+published package never need this directory; it only matters when changing the
+plugin.
 
 ## Layout
 
