@@ -252,3 +252,28 @@ start = element log {
 #assert(multi-msg.contains("nope"))
 #assert(multi-msg.contains("<bogus2>"))
 #assert(multi-msg.position("nope") < multi-msg.position("<bogus2>"), message: "errors not in source order: " + multi-msg)
+
+// --- snippet windowing edge cases -----------------------------------------------
+
+#import "/src/relaxng/relaxng.typ": snippet-at
+
+// The offending element ITSELF is long (mixed content, so it stays on one
+// line even pretty-printed): the marked span is windowed too (head…tail,
+// capped caret run), keeping the snippet bounded -- windowing only the
+// context AROUND the span would reproduce the whole element verbatim.
+#let self-long-doc = article(elem("qux", long-prose + long-prose + long-prose))
+#let self-long = (long-utils.validate)(self-long-doc)
+#assert(not self-long.valid)
+#let self-snip = self-long.errors.first().snippet
+#assert(self-snip != none)
+#assert(self-snip.len() < 500, message: "snippet was " + str(self-snip.len()) + " chars: " + self-snip)
+#assert(self-snip.contains("…"))
+#assert(self-snip.contains("<qux>"))
+#assert(not self-snip.contains(long-prose), message: "full element leaked into snippet: " + self-snip)
+
+// Degenerate zero-width span (start == end, sitting at the end of its line):
+// still yields a snippet with a single caret, rather than tripping over the
+// empty cluster slice (`().join("")` is none, not "").
+#let zw = snippet-at("<foo />", 7, 7)
+#assert.eq(type(zw), str)
+#assert(zw.contains("^"), message: "expected a caret: " + zw)

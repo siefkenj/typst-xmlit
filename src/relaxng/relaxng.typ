@@ -96,11 +96,19 @@
 }
 
 // Tunables for the snippet shown under a located error. Character counts
-// (not bytes) -- see the char-index conversion inside `format-errors`.
+// (not bytes) -- see the char-index conversion inside `snippet-at`.
 #let _snippet-context-lines = 2
 #let _snippet-max-line-chars = 120
 #let _snippet-window-chars = 60
+#let _snippet-max-marked-chars = 60
 #let _snippet-max-errors = 5
+
+// `array.join` returns `none` (not "") for an empty array; normalize so the
+// windowing code below always gets a string back from a cluster slice.
+#let _joined(cls) = {
+  let s = cls.join("")
+  if s == none { "" } else { s }
+}
 
 // Convert a byte offset within `text` to a character (grapheme cluster)
 // index by walking clusters and summing byte lengths -- keeps all
@@ -131,15 +139,23 @@
 
 // Build the target line's displayed (possibly windowed) text plus a
 // caret-underline beneath it, both bounded in character count regardless of
-// the line's real length.
+// the line's real length. The marked span itself is windowed too (head "…"
+// tail): a long invalid element -- e.g. a mixed-content <p> full of prose --
+// would otherwise reproduce, carets and all, the very wall of text this
+// machinery exists to avoid.
 #let _target-line-snippet(text, start-idx, end-idx) = {
   let cls = text.clusters()
   let needs-window = cls.len() > _snippet-max-line-chars
   let lo = if needs-window { calc.max(0, start-idx - _snippet-window-chars) } else { 0 }
   let hi = if needs-window { calc.min(cls.len(), end-idx + _snippet-window-chars) } else { cls.len() }
-  let before = (if needs-window and lo > 0 { "…" } else { "" }) + cls.slice(lo, start-idx).join("")
-  let marked = cls.slice(start-idx, end-idx).join("")
-  let after = cls.slice(end-idx, hi).join("") + (if needs-window and hi < cls.len() { "…" } else { "" })
+  let before = (if needs-window and lo > 0 { "…" } else { "" }) + _joined(cls.slice(lo, start-idx))
+  let marked = _joined(cls.slice(start-idx, end-idx))
+  let mcls = marked.clusters()
+  if mcls.len() > _snippet-max-marked-chars {
+    let half = calc.quo(_snippet-max-marked-chars, 2)
+    marked = _joined(mcls.slice(0, half)) + "…" + _joined(mcls.slice(mcls.len() - half))
+  }
+  let after = _joined(cls.slice(end-idx, hi)) + (if needs-window and hi < cls.len() { "…" } else { "" })
   (
     text: before + marked + after,
     pad: " " * before.clusters().len(),
@@ -415,7 +431,11 @@
     let spans-by-line = (:)
     let unlocated = ()
     for e in result.errors {
-      let path = locate-path(compact.ranges, e.start)
+      // `start` is none (JSON null) for positionless errors (e.g. the
+      // plugin's internal buffer/pattern limits) -- those can't be tied to
+      // an element, so they fall through to the `unlocated` list.
+      let start = e.at("start", default: none)
+      let path = if start == none { none } else { locate-path(compact.ranges, start) }
       let drange = if path == none { none } else { display.ranges.find(r => r.path == path) }
       if drange == none {
         unlocated.push(e.message)

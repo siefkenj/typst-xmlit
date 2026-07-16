@@ -103,5 +103,23 @@
 #assert.eq(pretty-str, "<root>\n  <p>\n    <m>⟦math-0⟧</m>\n  </p>\n</root>")
 #assert.eq(math-items.len(), 1)
 
+// --- Byte-identity of the ranges-recording serializer ------------------------
+
+// The relaxng helpers compute validator byte offsets against plain
+// `xml-to-string` output but look them up in `xml-to-string-with-ranges`
+// ranges -- the two serializers must stay byte-identical, or every located
+// error snippet silently misaligns.
+#import "/src/lib.typ": xml-to-string-with-ranges
+
+#let reader-doc = xml("fixture.xml")
+#assert.eq(xml-to-string(reader-doc), xml-to-string-with-ranges(reader-doc).xml)
+
+#let authored = root(a(b(), p[Mixed #em[bold] text & more]), b(id: "2"))
+#assert.eq(xml-to-string(authored), xml-to-string-with-ranges(authored).xml)
+#assert.eq(
+  xml-to-string(authored, pretty-print: true),
+  xml-to-string-with-ranges(authored, pretty-print: true).xml,
+)
+
 #import "/src/lib.typ": to-xml, make-tag  // legacy API still importable
 #assert(type(make-tag) == function)
