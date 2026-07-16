@@ -259,16 +259,6 @@ text (mixed content) stay inline, so no significant whitespace is introduced:
 Pretty-printed output is meant for reading; it is not byte-faithful to
 `xml()` reader input.
 
-## Testing
-
-Tests run with [tytanic](https://github.com/typst-community/tytanic):
-
-```sh
-tt run
-```
-
-See [Development](#development) for the full testing story.
-
 ## Development
 
 Clone with submodules (the RELAX NG plugin vendors its Rust dependencies):
@@ -284,7 +274,7 @@ toolchain with the `wasm32-unknown-unknown` target, and `wasm-opt` (binaryen).
 
 ### Tests
 
-The suite has three layers:
+The suite has four layers:
 
 1. **Unit tests** — `tests/<name>/test.typ`, discovered and run by
    [tytanic](https://github.com/typst-community/tytanic). They are
@@ -305,14 +295,19 @@ The suite has three layers:
    not named `test.typ`, so tytanic ignores them; check them with the loop in
    `tests/expect-fail/README.md`.
 
-3. **Visual smoke tests** — co-located `src/**/*.test.typ` files. Compile one
+3. **Examples** — every `examples/*.typ` must compile cleanly, so the
+   documented usage can't silently drift from the API.
+
+4. **Visual smoke tests** — co-located `src/**/*.test.typ` files. Compile one
    and eyeball the output:
 
    ```sh
    typst compile --root . src/relaxng/relaxng.test.typ out.pdf
    ```
 
-The plugin also has native Rust tests: `cd plugin/typst-relaxng && cargo test`.
+Layers 1–3 all run via `tests/run.sh` (which `tt run` covers for layer 1
+only); the plugin also has native Rust tests:
+`cd plugin/typst-relaxng && cargo test`.
 
 ### Rebuilding the WASM plugin
 

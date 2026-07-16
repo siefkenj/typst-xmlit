@@ -37,7 +37,8 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Run the test suite and compile the examples, using the plugin built above.
+  # Run the test suite (which also compiles the examples), using the plugin
+  # built above.
   test:
     needs: build
     runs-on: ubuntu-latest
@@ -50,17 +51,11 @@ jobs:
           name: relaxng-wasm
           path: src/relaxng
 
-      - name: Run tests and compile examples in the dev container
+      - name: Run tests in the dev container
         uses: devcontainers/ci@v0.3
         with:
           push: never
-          runCmd: |
-            set -eu
-            ./tests/run.sh
-            for ex in examples/*.typ; do
-              echo "compiling $ex"
-              typst compile --root . -f pdf "$ex" /dev/null
-            done
+          runCmd: ./tests/run.sh
 
   # Release gate: assemble dist/ the way the package ships (make_dist.sh
   # rebuilds the plugin, runs the tests, and vendors src/) and verify a
@@ -84,17 +79,20 @@ jobs:
 
             # Verify an end-user document compiles against the vendored package,
             # exercising the bundled WASM plugin (create-from-relaxng +
-            # validate). Typst resolves `@preview/...` from
-            # `$TYPST_PACKAGE_PATH/preview/...`, so expose dist/ under `preview`.
+            # validate). Validate under @local (Typst's namespace for
+            # unpublished packages), not @preview (the Universe registry
+            # namespace): Typst resolves `@local/...` from
+            # `$TYPST_PACKAGE_PATH/local/...`, so expose dist/ under `local`.
             mkdir -p pkgroot
-            ln -sfn "$PWD/dist" pkgroot/preview
+            ln -sfn "$PWD/dist" pkgroot/local
             VERSION=$(grep -m1 '^version' typst.toml | sed 's/.*"\(.*\)"/\1/')
             {
-              echo "#import \"@preview/xmlit:$VERSION\": create-from-relaxng, xml-to-string"
-              echo '#let (root, validate, foo, bar) = create-from-relaxng('
+              echo "#import \"@local/xmlit:$VERSION\": create-from-relaxng, xml-to-string"
+              echo '#let (utils, elements) = create-from-relaxng('
               echo '  "start = element foo { element bar { attribute baz { text } }* }",'
               echo ')'
+              echo '#let (foo, bar) = elements'
               echo '#assert.eq(xml-to-string(foo(bar(baz: "zz"))), "<foo><bar baz=\"zz\" /></foo>")'
-              echo '#assert(validate(foo(bar(baz: "zz"))).valid)'
+              echo '#assert((utils.validate)(foo(bar(baz: "zz"))).valid)'
             } > smoke-test.typ
             TYPST_PACKAGE_PATH="$PWD/pkgroot" typst compile -f pdf smoke-test.typ smoke-test.pdf

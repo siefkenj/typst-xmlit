@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Test runner: compiles every tests/<name>/test.typ (a test passes if it
-# compiles — tests use `assert`/`panic` to fail) and checks the expected-failure
-# probes in tests/expect-fail/ (each MUST fail to compile). An optional argument
-# filters tests by substring of their path.
+# compiles — tests use `assert`/`panic` to fail), checks the expected-failure
+# probes in tests/expect-fail/ (each MUST fail to compile), and compiles every
+# examples/*.typ (each must compile cleanly, so the docs never bit-rot). An
+# optional argument filters tests by substring of their path.
 #
 # The RELAX NG tests load the bundled plugin at src/relaxng/relaxng.wasm; if you
 # changed the plugin sources, rebuild it first with plugin/build.sh.
@@ -42,6 +43,23 @@ for f in tests/expect-fail/*.typ; do
     else
         pass=$((pass + 1))
         echo "PASS $name (fails as expected)"
+    fi
+done
+
+# Examples: each examples/*.typ must compile cleanly, so the documented usage
+# can't silently drift from the API.
+for f in examples/*.typ; do
+    name="$f"
+    if [[ -n "$filter" && "$name" != *"$filter"* ]]; then
+        continue
+    fi
+    if out="$(typst compile --root . -f pdf "$f" /dev/null 2>&1)"; then
+        pass=$((pass + 1))
+        echo "PASS $name"
+    else
+        fail=$((fail + 1))
+        echo "FAIL $name"
+        echo "$out" | sed 's/^/     /'
     fi
 done
 
