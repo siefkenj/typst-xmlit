@@ -7,13 +7,19 @@
 
 // --- Factory shape ------------------------------------------------------------
 
-#let made = create-from-relaxng(grammar)
-#assert.eq(made.roots, ("foo",))
-#assert.eq(made.elements, ("bar", "foo"))
+// Returns (elements: <name -> tag function>, utils: (..grammar helpers..));
+// destructure it directly.
+#assert.eq(create-from-relaxng(grammar).keys(), ("elements", "utils"))
+#let (utils, elements) = create-from-relaxng(grammar)
+#assert.eq(utils.roots, ("foo",))
+#assert.eq(elements.keys(), ("bar", "foo"))
+#assert.eq(utils.keys(), ("validate-and-render", "validate", "roots"))
 
 // Destructuring works as advertised.
-#let (root, validate, foo, bar) = made
-#assert.eq(type(root), function)
+#let (validate-and-render, validate) = utils
+#let (foo, bar) = elements
+#assert.eq(type(validate-and-render), function)
+#assert.eq(type(validate), function)
 #assert.eq(type(foo), function)
 #assert.eq(type(bar), function)
 
@@ -22,6 +28,15 @@
   xml-to-string(foo(bar(baz: "zz"))),
   "<foo><bar baz=\"zz\" /></foo>",
 )
+
+// A grammar element named like a helper no longer collides with it: the tag
+// function lives in `elements`, the helper in `utils`.
+#let (utils: clash-utils, elements: clash-elements) = create-from-relaxng(
+  "start = element validate { text }",
+)
+#assert.eq(type(clash-elements.validate), function)
+#assert.eq(xml-to-string((clash-elements.validate)("x")), "<validate>x</validate>")
+#assert((clash-utils.validate)((clash-elements.validate)("x")).valid)
 
 // --- Validation ----------------------------------------------------------------
 
@@ -56,22 +71,26 @@ start = element log {
   attribute code { xsd:string { pattern = \"[A-Z]{2}-[0-9]+\" } }
 }
 "
-#let dt = create-from-relaxng(dt-grammar)
+#let (utils: dt-utils, elements: dt-elements) = create-from-relaxng(dt-grammar)
+#let dt-validate = dt-utils.validate
+#let log = dt-elements.log
 // Valid date (2024 is a leap year) and matching pattern.
-#assert((dt.validate)((dt.log)(when: "2024-02-29", code: "AB-123")).valid)
+#assert(dt-validate(log(when: "2024-02-29", code: "AB-123")).valid)
 // Invalid date (2023 is not a leap year).
-#assert(not (dt.validate)((dt.log)(when: "2023-02-29", code: "AB-123")).valid)
+#assert(not dt-validate(log(when: "2023-02-29", code: "AB-123")).valid)
 // Pattern facet violation.
-#assert(not (dt.validate)((dt.log)(when: "2024-01-01", code: "nope")).valid)
+#assert(not dt-validate(log(when: "2024-01-01", code: "nope")).valid)
 
-// --- root template ---------------------------------------------------------------
+// --- validate-and-render template -------------------------------------------------
 
-// On valid input, root returns renderable content (the XML source as raw).
-#let rendered = root(foo(bar(baz: "zz")))
+// On valid input, validate-and-render returns renderable content (the XML
+// source as raw).
+#let rendered = validate-and-render(foo(bar(baz: "zz")))
 #assert.eq(type(rendered), content)
 
-// `#show: root` end-to-end (renders into the test document).
+// `#show: utils.validate-and-render` end-to-end (renders into the test
+// document).
 #[
-  #show: root
+  #show: utils.validate-and-render
   #foo[#bar(baz: "xx")]
 ]

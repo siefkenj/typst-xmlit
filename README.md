@@ -55,64 +55,105 @@ Inside content (`[...]` blocks) markup is automatically converted into tags:
 This mapping can be overwritten by providing `handlers` to the make-tag function.
 
 ```typst
+#import "../src/lib.typ": *
+
 #let p = make-tag("p", handlers: (
   // strong -> <alert> instead of <b>
   "strong": (c, convert, ctx) => ((tag: "alert", attrs: (:), children: convert(c.body)),),
-  // serialize equation bodies yourself (the default emits Typst math source,
-  // e.g. $x^2$ -> "x^2", that evals back to the same expression; unsupported
-  // constructs like matrices degrade to a repr fallback)
-  "math": (body, convert, ctx) => ("...",),
+  // Control how the _content_ of math is serialized.
+  "math": (body, convert, ctx) => ("MATH: \"" + repr(body) + "\"",),
+  // Control what tag is used for math blocks.
+  "equation": (c, convert, ctx) => {
+    let f = c.fields()
+    let tag = if f.block { "md" } else { "m" }
+    // Use the math handler we defined already.
+    let math-handler = ctx.handlers.at("math")
+    ((tag: tag, attrs: (:), children: math-handler(f.body, convert, ctx)),)
+  },
 ))
-#p[A *very important* point about $x^2$.]
+
+// Becomes: `<p>A <alert>very important</alert> point about <m>MATH: "attach(base: [x], t: [2])"</m>. It can sometimes be solved with <md>MATH: "root(radicand: [⋅])"</md></p>`
+#xml-to-string(p[
+  A *very important* point about $x^2$. It can sometimes be solved with
+  $
+    sqrt(dot)
+  $
+])
 ```
 
-A handler is called as `handler(element, convert, ctx)`: `convert` turns any
-child value (e.g. the element's body) into an array of XML nodes using the
-same handler table, and `ctx.handlers` is the merged handler table, for
-handlers that delegate to another slot (the built-in `equation` handler
-dispatches to `"math"` this way; the `"math"` slot receives the equation's
-*body* rather than an element).
+A handler has the signature `handler(element, convert, ctx)`
+ - `convert` turns any child value (e.g. the element's body) into an array of XML nodes using the
+same handler table
+ - `ctx` provides an object that can be used to look up other handlers that are defined. They will be defined on `ctx.handlers`.
 
 Unmapped markup (e.g. headings) raises an error naming the element and the
 `handlers:` entry that would map it.
 
+#### Preserving Math
+
+There is no way (in typst 0.15) to serialize all math such that `eval`
+can evaluate it as valid typst code. Since you may want access to the math (for example,
+measure it), the `extract-math: true` option may be passed when building an element constructor. 
+If passed, all found math is collected into an array and the math in the XML string is replaced with a sentinel.
+
+```typst
+#let (xml-str, math) = xml-to-string(doc, extract-math: true)
+// xml-str: "<p>Area: <m>⟦math-0⟧</m></p>"      (text sentinels, ⟦id⟧)
+// math:    ("math-0": $pi r^2$, ...)            (real equation content)
+
+// rendered sizes, keyed by the same ids that appear in the XML:
+#context math.pairs().map(((id, eq)) => (id, measure(eq)))
+```
+
+Ids are assigned in document order ("math-0", "math-1", ...), so they are
+deterministic across compiles. The default (no `extract-math`).
+
+See [examples/render-xml-with-math.typ](examples/render-xml-with-math.typ) for an example where
+xml is produced with math rendered as "math" via typst.
+
 ## Typechecked authoring from a RELAX NG grammar
 
 `create-from-relaxng` derives tag functions from a RELAX NG grammar (compact
-syntax, `.rnc`) and validates the composed document — via a bundled WASM
+syntax, `.rnc`) and validates the composed document via a bundled WASM
 plugin (see [plugin/](plugin/README.md)):
 
 ```typst
 #import "@preview/xmlit:0.1.0": create-from-relaxng
 
-#let (root, foo, bar) = create-from-relaxng(
+#let (utils, elements) = create-from-relaxng(
   "start = element foo { element bar { attribute baz { text } }* }",
 )
+#let (foo, bar) = elements
 
-#show: root
+#show: utils.validate-and-render
 
 #foo[#bar(baz: "xx")]
 ```
 
-The returned dictionary has one tag function per element defined in the
-grammar, plus:
+The returned dictionary destructures into two entries:
 
-- `root` — a template (`#show: root`) that serializes its body, validates it
-  against the grammar, and renders the XML source. Invalid documents fail
-  compilation with a readable panic, e.g.:
+- `elements` — a dictionary mapping each element name defined in the grammar
+  to its tag function (destructure the ones you need, as above).
+- `utils` — grammar-level helpers:
+  - `validate-and-render` — a template (`#show: utils.validate-and-render`)
+    that serializes its body, validates it against the grammar, and renders
+    the XML source. Invalid documents fail compilation with a readable panic,
+    e.g.:
 
-  ```
-  XML failed RELAX NG validation:
-  - element <qux> is not allowed here. Expected element(s): bar. (line 1, column 7)
-  Document was: <foo><qux /></foo>
-  ```
+    ```
+    XML failed RELAX NG validation:
+    - element <qux> is not allowed here. Expected element(s): bar. (line 1, column 7)
+    Document was: <foo><qux /></foo>
+    ```
 
-- `validate` — validate content or an XML string without panicking; returns
-  `(valid: bool, errors: (..))`.
-- `roots` / `elements` — the allowed document-root names and all element names.
+  - `validate` — validate content or an XML string without panicking; returns
+    `(valid: bool, errors: (..))`.
+  - `roots` — the element names allowed as the document root. (All element
+    names are `elements.keys()`.)
 
-These reserved keys win over grammar elements with the same names. A
-`handlers:` argument is forwarded to every generated tag (see above).
+A `handlers:` argument passed to `create-from-relaxng` is forwarded to every
+generated tag function, so one handler table configures markup/math
+conversion for the whole grammar (see [Markup in bodies](#markup-in-bodies)).
 
 ## Serializing
 
@@ -127,6 +168,28 @@ the output of Typst's built-in `xml()` reader:
 Attribute order is preserved, text/attribute contexts are escaped correctly,
 empty elements self-close, and default-namespace declarations are re-emitted
 only where the namespace actually changes.
+
+### Pretty printing
+
+Pass `pretty-print: true` to indent the output. Only elements whose children
+are *all elements* are reflowed — one child per line; elements containing any
+text (mixed content) stay inline, so no significant whitespace is introduced:
+
+```typst
+#xml-to-string(root(a(b()), b(id: "2")), pretty-print: true)
+// <root>
+//   <a>
+//     <b />
+//   </a>
+//   <b id="2" />
+// </root>
+
+#xml-to-string(p[Some *bold* text], pretty-print: true)
+// <p>Some <b>bold</b> text</p>   (mixed content — left inline)
+```
+
+Pretty-printed output is meant for reading; it is not byte-faithful to
+`xml()` reader input.
 
 ## Testing
 

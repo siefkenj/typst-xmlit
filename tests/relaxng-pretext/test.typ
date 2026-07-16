@@ -14,7 +14,7 @@
 )
 
 // PreTeXt has no <b>; map *strong* markup to PreTeXt's <alert> instead.
-#let made = create-from-relaxng(
+#let (utils, elements) = create-from-relaxng(
   vfs,
   handlers: (
     "strong": (c, convert, ctx) => ((tag: "alert", attrs: (:), children: convert(c.body)),),
@@ -25,14 +25,15 @@
 
 // PreTeXt's start rule allows whole documents and many fragment roots
 // (modular source files), and defines hundreds of elements.
-#assert("pretext" in made.roots)
-#assert("chapter" in made.roots)
-#assert(made.elements.len() > 350)
+#assert("pretext" in utils.roots)
+#assert("chapter" in utils.roots)
+#assert(elements.len() > 350)
 #for name in ("article", "book", "theorem", "proof", "p", "m", "md", "em", "alert", "c") {
-  assert(name in made.elements, message: "missing element: " + name)
+  assert(name in elements, message: "missing element: " + name)
 }
 
-#let (root, validate, pretext, book, article, chapter, title, p) = made
+#let (validate-and-render, validate) = utils
+#let (pretext, book, article, chapter, title, p) = elements
 
 // --- Valid documents ----------------------------------------------------------
 
@@ -73,16 +74,16 @@
 
 // --- pretext-dev.rnc (multi-file include of pretext.rnc) -------------------------
 
-#let dev = create-from-relaxng((
+#let (utils: dev-utils, elements: dev-el) = create-from-relaxng((
   "pretext-dev.rnc": read("/tests/grammars/pretext-dev.rnc"),
   "pretext.rnc": read("/tests/grammars/pretext.rnc"),
   "pf-adapter.rnc": read("/tests/grammars/pf-adapter.rnc"),
   "pf-preamble-adapter.rnc": read("/tests/grammars/pf-preamble-adapter.rnc"),
   "pf_schema.rnc": read("/tests/grammars/pf_schema.rnc"),
 ))
-#assert("pretext" in dev.roots)
-#assert((dev.validate)((dev.pretext)((dev.article)((dev.title)("T"), (dev.p)("dev")))).valid)
+#assert("pretext" in dev-utils.roots)
+#assert((dev-utils.validate)((dev-el.pretext)((dev-el.article)((dev-el.title)("T"), (dev-el.p)("dev")))).valid)
 
-// --- root template ----------------------------------------------------------------
+// --- validate-and-render template --------------------------------------------------
 
-#assert.eq(type(root(pretext(article(title("T"), p("ok"))))), content)
+#assert.eq(type(validate-and-render(pretext(article(title("T"), p("ok"))))), content)

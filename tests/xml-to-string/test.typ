@@ -64,5 +64,44 @@
 // Plain string node is text-escaped.
 #assert.eq(xml-to-string("1 < 2 & 3"), "1 &lt; 2 &amp; 3")
 
+// --- Pretty printing -------------------------------------------------------
+
+#import "/src/lib.typ": make-tags
+
+#let (root, a, b, p, em) = make-tags("root", "a", "b", "p", "em")
+
+// Default (pretty-print: false) is unchanged.
+#assert.eq(xml-to-string(root(a(), b())), "<root><a /><b /></root>")
+
+// Element-only children get one-per-line, two-space indentation; nesting
+// increases depth; empty elements stay self-closing.
+#assert.eq(
+  xml-to-string(root(a(b()), b(id: "2")), pretty-print: true),
+  "<root>\n  <a>\n    <b />\n  </a>\n  <b id=\"2\" />\n</root>",
+)
+
+// Mixed content (any text child) stays inline -- no whitespace injected.
+#assert.eq(
+  xml-to-string(p[Some #em[bold] text], pretty-print: true),
+  "<p>Some <em>bold</em> text</p>",
+)
+
+// An element-only subtree nested inside mixed content is still prettified;
+// the surrounding mixed element stays inline.
+#assert.eq(
+  xml-to-string(p("intro: ", root(a(), b())), pretty-print: true),
+  "<p>intro: <root>\n  <a />\n  <b />\n</root></p>",
+)
+
+// A single leaf element: nothing to indent.
+#assert.eq(xml-to-string(a(), pretty-print: true), "<a />")
+
+// Pretty-printing composes with extract-math. Here <p>'s only child is the
+// <m> element (element-only, so it indents); <m> itself holds a text
+// sentinel (mixed, so it stays inline).
+#let (pretty-str, math) = xml-to-string(root(p[$x^2$]), pretty-print: true, extract-math: true)
+#assert.eq(pretty-str, "<root>\n  <p>\n    <m>⟦math-0⟧</m>\n  </p>\n</root>")
+#assert.eq(math.len(), 1)
+
 #import "/src/lib.typ": to-xml, make-tag  // legacy API still importable
 #assert(type(make-tag) == function)

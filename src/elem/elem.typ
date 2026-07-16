@@ -172,12 +172,15 @@
     let tag = if f.at("block", default: false) { "pre" } else { "c" }
     ((tag: tag, attrs: (:), children: (f.text,)),)
   },
-  // $...$ -> <m>, $ ... $ -> <md>. The body is serialized by the "math" slot.
+  // $...$ -> <m>, $ ... $ -> <md>. The children (string form) are produced
+  // by the "math" slot; the node additionally keeps the actual equation
+  // content under the reserved `math` key, so `xml-to-string(...,
+  // extract-math: true)` can hand it back for rendering/measuring.
   "equation": (c, convert, ctx) => {
     let f = c.fields()
     let tag = if f.block { "md" } else { "m" }
     let math-handler = ctx.handlers.at("math")
-    ((tag: tag, attrs: (:), children: math-handler(f.body, convert, ctx)),)
+    ((tag: tag, attrs: (:), children: math-handler(f.body, convert, ctx), math: c),)
   },
   // Special slot (not a content-function name): serializes the *body* of an
   // equation into child nodes. Unlike the others, it receives the equation's
