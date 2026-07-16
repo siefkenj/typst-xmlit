@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 # Cancel superseded runs on the same ref.
 concurrency:
@@ -12,54 +11,88 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  # Build the RELAX NG WASM plugin from source and publish it as an artifact.
+  # The plugin binary is git-ignored (never committed), so the test job below
+  # gets it from here instead of from the repo.
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (with submodules)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
-          # The RELAX NG plugin sources live in nested submodules
+          # plugin/build.sh compiles from nested submodule sources
           # (plugin/relaxng_validator_wasm -> relaxng-rust).
           submodules: recursive
 
-      # Build the image from .devcontainer/ and run the build + tests *inside*
-      # the dev container, so CI uses the exact toolchain (Typst 0.15.0, Rust
-      # with the wasm32-unknown-unknown target) developers use locally.
-      - name: Build plugin and run tests in the dev container
+      - name: Build the RELAX NG WASM plugin in the dev container
+        uses: devcontainers/ci@v0.3
+        with:
+          push: never
+          runCmd: plugin/build.sh
+
+      - name: Upload the plugin artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: relaxng-wasm
+          path: src/relaxng/relaxng.wasm
+          if-no-files-found: error
+          retention-days: 1
+
+  # Run the test suite (which also compiles the examples), using the plugin
+  # built above.
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch the RELAX NG WASM plugin
+        uses: actions/download-artifact@v8
+        with:
+          name: relaxng-wasm
+          path: src/relaxng
+
+      - name: Run tests in the dev container
+        uses: devcontainers/ci@v0.3
+        with:
+          push: never
+          runCmd: ./tests/run.sh
+
+  # Release gate: assemble dist/ the way the package ships (make_dist.sh
+  # rebuilds the plugin, runs the tests, and vendors src/) and verify a
+  # document compiles against @preview/xmlit.
+  dist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Build dist and verify a document compiles against it
         uses: devcontainers/ci@v0.3
         with:
           push: never
           runCmd: |
-            set -e
+            set -eu
+            # --no-tag: CI builds aren't tied to a release tag, so pin the
+            # README's links to the current commit (see make_dist.sh --help).
+            ./make_dist.sh --no-tag
 
-            echo "::group::Toolchain versions"
-            typst --version
-            rustc --version
-            cargo --version
-            echo "::endgroup::"
-
-            # "Builds": compile the RELAX NG WASM plugin from source and place
-            # it where the Typst package loads it (src/relaxng/relaxng.wasm).
-            echo "::group::Build RELAX NG WASM plugin"
-            (
-              cd plugin/typst-relaxng
-              cargo build --release --target wasm32-unknown-unknown
-              cp target/wasm32-unknown-unknown/release/typst_relaxng.wasm \
-                 ../../src/relaxng/relaxng.wasm
-            )
-            echo "::endgroup::"
-
-            # "Runs the tests": the tytanic-layout tests under tests/<name>/ are
-            # compile-only (assertion-based), so a plain `typst compile` gates
-            # them. tytanic (`tt`) is not needed in the container.
-            echo "Running Typst test suite"
-            fail=0
-            for t in $(find tests -name test.typ | sort); do
-              if typst compile --root . "$t" /tmp/out.pdf; then
-                echo "PASS  $t"
-              else
-                echo "FAIL  $t"
-                fail=1
-              fi
-            done
-            exit $fail
+            # Verify an end-user document compiles against the vendored package,
+            # exercising the bundled WASM plugin (create-from-relaxng +
+            # validate). Validate under @local (Typst's namespace for
+            # unpublished packages), not @preview (the Universe registry
+            # namespace): Typst resolves `@local/...` from
+            # `$TYPST_PACKAGE_PATH/local/...`, so expose dist/ under `local`.
+            mkdir -p pkgroot
+            ln -sfn "$PWD/dist" pkgroot/local
+            VERSION=$(grep -m1 '^version' typst.toml | sed 's/.*"\(.*\)"/\1/')
+            {
+              echo "#import \"@local/xmlit:$VERSION\": create-from-relaxng, xml-to-string"
+              echo '#let (utils, elements) = create-from-relaxng('
+              echo '  "start = element foo { element bar { attribute baz { text } }* }",'
+              echo ')'
+              echo '#let (foo, bar) = elements'
+              echo '#assert.eq(xml-to-string(foo(bar(baz: "zz"))), "<foo><bar baz=\"zz\" /></foo>")'
+              echo '#assert((utils.validate)(foo(bar(baz: "zz"))).valid)'
+            } > smoke-test.typ
+            TYPST_PACKAGE_PATH="$PWD/pkgroot" typst compile -f pdf smoke-test.typ smoke-test.pdf
