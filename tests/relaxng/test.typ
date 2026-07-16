@@ -87,10 +87,20 @@ start = element log {
 // source as raw).
 #let rendered = validate-and-render(foo(bar(baz: "zz")))
 #assert.eq(type(rendered), content)
+#assert.eq(rendered.text, "<foo><bar baz=\"zz\" /></foo>")
+
+// pretty-print option: the rendered source is indented (validation still uses
+// the compact form under the hood).
+#let rendered-pretty = validate-and-render(foo(bar(baz: "zz")), pretty-print: true)
+#assert.eq(rendered-pretty.text, "<foo>\n  <bar baz=\"zz\" />\n</foo>")
 
 // `#show: utils.validate-and-render` end-to-end (renders into the test
-// document).
+// document); `.with(pretty-print: true)` also works as a show rule.
 #[
   #show: utils.validate-and-render
+  #foo[#bar(baz: "xx")]
+]
+#[
+  #show: utils.validate-and-render.with(pretty-print: true)
   #foo[#bar(baz: "xx")]
 ]

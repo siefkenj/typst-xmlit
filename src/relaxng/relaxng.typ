@@ -52,9 +52,10 @@
 ///   function; destructure what you need: `#let (foo, bar) = elements`
 /// - `utils` holds the grammar-level helpers `validate-and-render` (a
 ///   `#show:` template that validates its body and renders the XML source,
-///   panicking with readable errors if invalid), `validate` (non-panicking;
-///   returns `(valid: bool, errors: (..))`), and `roots` (the element names
-///   allowed as the document root).
+///   panicking with readable errors if invalid; accepts a `pretty-print`
+///   option -- `#show: utils.validate-and-render.with(pretty-print: true)`),
+///   `validate` (non-panicking; returns `(valid: bool, errors: (..))`), and
+///   `roots` (the element names allowed as the document root).
 ///
 /// - `rnc`: the grammar source (str or bytes), or -- for grammars split
 ///   across several files with `include`/`external` -- a dictionary mapping
@@ -93,8 +94,13 @@
 
   // Validating template: serialize the body, panic on validation errors,
   // render the XML source on success. Use as
-  // `#show: utils.validate-and-render`.
-  let validate-and-render = body => {
+  // `#show: utils.validate-and-render`, or with options via
+  // `#show: utils.validate-and-render.with(pretty-print: true)`.
+  //
+  // Validation always uses the compact serialization (so cosmetic
+  // pretty-print whitespace can never affect the result); only the rendered
+  // output is indented when `pretty-print` is true.
+  let validate-and-render = (body, pretty-print: false) => {
     let xml-str = xml-to-string(body, handlers: handlers)
     let result = json(p.validate(rnc-bytes, bytes(xml-str)))
     if not result.valid {
@@ -103,7 +109,12 @@
           + "\nDocument was: " + xml-str,
       )
     }
-    raw(xml-str, lang: "xml", block: true)
+    let display = if pretty-print {
+      xml-to-string(body, handlers: handlers, pretty-print: true)
+    } else {
+      xml-str
+    }
+    raw(display, lang: "xml", block: true)
   }
 
   let tags = (:)
