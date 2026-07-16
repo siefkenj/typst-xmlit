@@ -156,20 +156,59 @@ The returned dictionary destructures into two entries:
 
 - `elements` — a dictionary mapping each element name defined in the grammar
   to its tag function (destructure the ones you need, as above).
-- `utils` — grammar-level helpers:
-  - `validate-and-render(body) -> content` — a template
+- `utils` — grammar-level helpers, each accepting `pretty-print: false` where
+  applicable (see [Pretty printing](#pretty-printing)):
+  - `render(body, pretty-print: false) -> content` — a template
+    (`#show: utils.render`) that serializes its body and renders the XML
+    source *without validating*. Useful for fast iteration; switch to
+    `validate-and-render` once the document is ready to be checked.
+  - `validate-and-render(body, pretty-print: false) -> content` — a template
     (`#show: utils.validate-and-render`) that serializes its body, validates
     it against the grammar, and renders the XML source. Invalid documents fail
-    compilation with a readable panic, e.g.:
+    compilation with a readable panic that includes a small line-numbered
+    snippet of the source around each error, not the whole document:
 
     ```
     XML failed RELAX NG validation:
-    - element <qux> is not allowed here. Expected element(s): bar. (line 1, column 7)
-    Document was: <foo><qux /></foo>
+    - element <qux> is not allowed here. Expected element(s): bar.
+        1 | <foo>
+      > 2 |   <qux />
+              ^^^^^^^
+        3 | </foo>
     ```
 
+    No `(line, column)` is shown — those would be positions in the invisible,
+    internally-generated compact XML string, not anything actually written.
+
+    The snippet is windowed both by line (a couple of lines of context) and,
+    within the target line itself, by character count — pretty-printing only
+    breaks lines between all-element children, so a `<p>` full of prose (or
+    even a whole document with no element-only nesting) can pretty-print to
+    one very long line; the character-level window is what keeps the snippet
+    short regardless.
+
+    Use `.with(pretty-print: true)` in a show rule:
+    `#show: utils.validate-and-render.with(pretty-print: true)`.
+
+  - `render-and-show-validation-errors(body, pretty-print: true) -> content` —
+    a template (`#show: utils.render-and-show-validation-errors`) for
+    authoring/preview: like `validate-and-render`, but instead of panicking on
+    an invalid document it renders the XML source anyway, highlighting each
+    offending element's line in place with its error message. Errors that
+    can't be tied to a specific element are listed below the block. Useful
+    while iterating on a document you know isn't finished yet.
   - `validate(doc) -> (valid: bool, errors: array)` — validate content or an
-    XML string without panicking.
+    XML string without panicking. On failure, each entry in `errors` also
+    carries a `snippet` — the same windowed source excerpt used in
+    `validate-and-render`'s panic message (`none` only for errors with no
+    locatable position, e.g. an internal buffer-limit error). For a raw `doc`
+    string the snippet windows directly around the error's position in that
+    string (no round-trip through the grammar needed), and the plugin's raw
+    `line`/`column` fields are kept, since they index the exact string
+    written. For authored content the snippet is mapped through the element
+    that produced it, and `line`/`column` are *removed* — those would be
+    positions in an invisible, internally-generated XML string, not anything
+    actually written, so they'd only mislead.
   - `roots` — the element names allowed as the document root. (All element
     names are `elements.keys()`.)
 

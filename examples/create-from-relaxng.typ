@@ -2,11 +2,12 @@
 // then compose documents that are typechecked against it. `create-from-relaxng`
 // returns `(elements, utils)`: `elements` maps each grammar element name to its
 // tag function, and `utils` holds `validate-and-render` (a `#show:` template),
-// `validate` (non-panicking), and `roots`.
+// `render-and-show-validation-errors` (renders + highlights errors in place
+// instead of panicking), `validate` (non-panicking), and `roots`.
 
 #import "../src/lib.typ": create-from-relaxng, elem
 
-#set page(paper: "us-letter", margin: 2cm)
+#set page(height: auto, margin: 2cm)
 
 // A tiny grammar: a recipe with a required title, one-or-more ingredients,
 // and zero-or-more steps.
@@ -52,9 +53,13 @@ it against the grammar (panicking on any error), and shows the indented XML sour
 == Catching an invalid document
 
 `utils.validate` checks a document without panicking, returning `(valid, errors)`. Here the required
-`<title>` is missing before the ingredients:
+`<title>` is missing before the ingredients. Each error also carries a `snippet` --- the same
+located, windowed source excerpt used in `validate-and-render`'s panic message. Since this document
+was authored directly (not passed as a raw XML string), there's no useful `line`/`column` to show ---
+those would be positions in an invisible, internally-generated XML string the user never wrote, so
+`validate` omits them here; the snippet already shows the real location:
 
-#let bad = recipe(servings: "2", {
+#let bad = recipe(serving: "2", {
   ingredient[Water]
 })
 
@@ -68,7 +73,22 @@ it against the grammar (panicking on any error), and shows the indented XML sour
   [
     valid: #raw(repr(result.valid))
     #for e in result.errors [
-      - #e.message (line #e.line, column #e.column)
+      - #e.message
+        #if e.at("snippet", default: none) != none [
+          #raw(e.snippet, block: true)
+        ]
     ]
   ],
 )
+
+== Showing errors in place
+
+`#show: utils.render-and-show-validation-errors` renders the same source but, instead of panicking,
+highlights the offending element and shows the message right next to it---handy when authoring.
+
+#[
+  #show: utils.render-and-show-validation-errors
+  #recipe(serving: "2", {
+    ingredient[Water]
+  })
+]

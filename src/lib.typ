@@ -23,5 +23,5 @@
 
 #import "elem/elem.typ": default-handlers, convert, content-to-children, make-tag, make-tags, elem, math-to-string
 #import "relaxng/relaxng.typ": create-from-relaxng
-#import "xml-to-string/xml-to-string.typ": esc-text, esc-attr, xml-to-string
+#import "xml-to-string/xml-to-string.typ": esc-text, esc-attr, xml-to-string, xml-to-string-with-ranges
 #import "xml-to-string/make-tag.typ": xml-escape, to-xml
