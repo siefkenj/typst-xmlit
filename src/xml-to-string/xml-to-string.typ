@@ -137,12 +137,12 @@
 /// tag function, or a markup block, normalized via `convert` (`handlers:` is
 /// forwarded to it).
 ///
-/// With `extract-math: true`, returns an `(xml, math)` array instead of a
-/// plain string: `xml` is the XML string with each equation's content
-/// replaced by a text sentinel `⟦math-N⟧`, and `math` is a dictionary
-/// mapping each id ("math-0", "math-1", ... in document order) to the actual
-/// Typst equation content -- ready to be rendered or `measure()`d. Equation
-/// nodes are recognized by the reserved `math` key that the built-in
+/// With `extract-math: true`, returns a dictionary `(xml: str, math-items:
+/// dictionary)` instead of a plain string: `xml` is the XML string with each
+/// equation's content replaced by a text sentinel `⟦math-N⟧`, and
+/// `math-items` maps each id ("math-0", "math-1", ... in document order) to
+/// the actual Typst equation content -- ready to be rendered or `measure()`d.
+/// Equation nodes are recognized by the reserved `math` key that the built-in
 /// `equation` handler stores on them.
 ///
 /// With `pretty-print: true`, elements whose children are all elements (no
@@ -155,8 +155,8 @@
 ///   #xml-to-string(xml("doc.xml"))
 ///   #xml-to-string(foo(bar(baz: "zz")))
 ///   #xml-to-string(foo(bar(baz: "zz")), pretty-print: true)
-///   #let (xml-str, math) = xml-to-string(doc, extract-math: true)
-///   #context math.pairs().map(((id, eq)) => (id, measure(eq)))
+///   #let (xml, math-items) = xml-to-string(doc, extract-math: true)
+///   #context math-items.pairs().map(((id, eq)) => (id, measure(eq)))
 #let xml-to-string(
   node,
   inherited-ns: none,
@@ -166,7 +166,7 @@
 ) = {
   let r = _serialize(node, inherited-ns, handlers, extract-math, pretty-print, 0, (:))
   if extract-math {
-    (r.text, r.math)
+    (xml: r.text, math-items: r.math)
   } else {
     r.text
   }

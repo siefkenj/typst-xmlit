@@ -8,6 +8,18 @@ Create functions which return XML elements with `make-tag`/`make-tags`.
 Use the resulting functions using standard typst syntax. Named arguments are converted to attributes and positional arguments
 are treated as children.
 
+### `make-tag(tag, handlers: auto) -> function`
+
+Creates a tag function for a single element named `tag`. `handlers` overrides
+how body content is converted to XML (see [Markup in bodies](#markup-in-bodies)).
+The returned tag function takes named arguments as attributes and positional
+arguments as children: `<tag>(..args) -> content`.
+
+### `make-tags(..names, handlers: auto) -> array`
+
+Creates one tag function per name, returned in order for destructuring;
+`handlers` is forwarded to each.
+
 ```typst
 #import "@preview/xmlit:0.1.0": make-tags, xml-to-string
 
@@ -93,16 +105,18 @@ Unmapped markup (e.g. headings) raises an error naming the element and the
 
 There is no way (in typst 0.15) to serialize all math such that `eval`
 can evaluate it as valid typst code. Since you may want access to the math (for example,
-measure it), the `extract-math: true` option may be passed when building an element constructor. 
-If passed, all found math is collected into an array and the math in the XML string is replaced with a sentinel.
+measure it), the `extract-math: true` option may be passed to `xml-to-string`.
+If passed, it returns a dictionary `(xml, math-items)`: all found math is
+collected into `math-items` and the math in the XML string is replaced with a
+sentinel.
 
 ```typst
-#let (xml-str, math) = xml-to-string(doc, extract-math: true)
-// xml-str: "<p>Area: <m>⟦math-0⟧</m></p>"      (text sentinels, ⟦id⟧)
-// math:    ("math-0": $pi r^2$, ...)            (real equation content)
+#let (xml, math-items) = xml-to-string(doc, extract-math: true)
+// xml:        "<p>Area: <m>⟦math-0⟧</m></p>"   (text sentinels, ⟦id⟧)
+// math-items: ("math-0": $pi r^2$, ...)         (real equation content)
 
 // rendered sizes, keyed by the same ids that appear in the XML:
-#context math.pairs().map(((id, eq)) => (id, measure(eq)))
+#context math-items.pairs().map(((id, eq)) => (id, measure(eq)))
 ```
 
 Ids are assigned in document order ("math-0", "math-1", ...), so they are
@@ -113,9 +127,17 @@ xml is produced with math rendered as "math" via typst.
 
 ## Typechecked authoring from a RELAX NG grammar
 
+### `create-from-relaxng(rnc, handlers: auto, wasm: auto) -> dictionary`
+
 `create-from-relaxng` derives tag functions from a RELAX NG grammar (compact
 syntax, `.rnc`) and validates the composed document via a bundled WASM
-plugin (see [plugin/](plugin/README.md)):
+plugin (see [plugin/](plugin/README.md)). It returns
+`(elements: dictionary, utils: dictionary)`. Parameters:
+
+- `rnc` — the grammar source (str/bytes), or a `(file-name: contents)`
+  dictionary for multi-file grammars (the first entry is the entry point).
+- `handlers` — forwarded to every generated tag function.
+- `wasm` — the validator plugin; defaults to the bundled one.
 
 ```typst
 #import "@preview/xmlit:0.1.0": create-from-relaxng
@@ -135,10 +157,10 @@ The returned dictionary destructures into two entries:
 - `elements` — a dictionary mapping each element name defined in the grammar
   to its tag function (destructure the ones you need, as above).
 - `utils` — grammar-level helpers:
-  - `validate-and-render` — a template (`#show: utils.validate-and-render`)
-    that serializes its body, validates it against the grammar, and renders
-    the XML source. Invalid documents fail compilation with a readable panic,
-    e.g.:
+  - `validate-and-render(body) -> content` — a template
+    (`#show: utils.validate-and-render`) that serializes its body, validates
+    it against the grammar, and renders the XML source. Invalid documents fail
+    compilation with a readable panic, e.g.:
 
     ```
     XML failed RELAX NG validation:
@@ -146,8 +168,8 @@ The returned dictionary destructures into two entries:
     Document was: <foo><qux /></foo>
     ```
 
-  - `validate` — validate content or an XML string without panicking; returns
-    `(valid: bool, errors: (..))`.
+  - `validate(doc) -> (valid: bool, errors: array)` — validate content or an
+    XML string without panicking.
   - `roots` — the element names allowed as the document root. (All element
     names are `elements.keys()`.)
 
@@ -157,9 +179,16 @@ conversion for the whole grammar (see [Markup in bodies](#markup-in-bodies)).
 
 ## Serializing
 
+### `xml-to-string(node, handlers: auto, extract-math: false, pretty-print: false) -> str | dictionary`
+
 `xml-to-string` accepts authored trees (the return value of a tag function or
 any markup content), plain node dictionaries/strings/arrays, and — faithfully —
-the output of Typst's built-in `xml()` reader:
+the output of Typst's built-in `xml()` reader. Parameters:
+
+- `node` — an authored tree, a node dict/str/array, or `xml()` reader output.
+- `handlers` — overrides for content conversion (see [Markup in bodies](#markup-in-bodies)).
+- `extract-math` — return a `(xml, math-items)` dictionary with equations pulled out (see below).
+- `pretty-print` — indent element-only content (see below).
 
 ```typst
 #xml-to-string(xml("doc.xml"))

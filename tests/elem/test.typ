@@ -144,21 +144,21 @@
 // Default serialization is unchanged by the reserved `math` key.
 #assert.eq(xml-to-string(foo[$x^2$]), "<foo><m>x^2</m></foo>")
 
-// extract-math: text sentinels in the string, actual equation content in the
-// dict, ids assigned in document order (including nested elements).
-#let (x-str, eqs) = xml-to-string(foo[$x^2$ and $ y $ #bar[nested $z$]], extract-math: true)
+// extract-math returns (xml, math-items): text sentinels in the string, and
+// the actual equation content keyed by id in document order (nested included).
+#let (xml, math-items) = xml-to-string(foo[$x^2$ and $ y $ #bar[nested $z$]], extract-math: true)
 #assert.eq(
-  x-str,
+  xml,
   "<foo><m>⟦math-0⟧</m> and <md>⟦math-1⟧</md> <bar>nested <m>⟦math-2⟧</m></bar></foo>",
 )
-#assert.eq(eqs.len(), 3)
-#assert.eq(repr(eqs.at("math-0")), repr($x^2$))
-#assert.eq(repr(eqs.at("math-1")), repr($ y $))
-#assert.eq(repr(eqs.at("math-2")), repr($z$))
+#assert.eq(math-items.len(), 3)
+#assert.eq(repr(math-items.at("math-0")), repr($x^2$))
+#assert.eq(repr(math-items.at("math-1")), repr($ y $))
+#assert.eq(repr(math-items.at("math-2")), repr($z$))
 
 // The extracted equations are real, renderable content: they can be measured.
 #context {
-  let size = measure(eqs.at("math-0"))
+  let size = measure(math-items.at("math-0"))
   assert(size.width > 0pt and size.height > 0pt)
 }
 

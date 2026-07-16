@@ -10,14 +10,14 @@
 /// Render `node` as XML source text with each `⟦math-N⟧` sentinel replaced
 /// by the corresponding typeset equation.
 #let render-with-math(node) = {
-  let (xml-str, math) = xml-to-string(node, extract-math: true)
+  let (xml, math-items) = xml-to-string(node, extract-math: true)
   let pos = 0
-  for m in xml-str.matches(regex("⟦(math-[0-9]+)⟧")) {
-    raw(xml-str.slice(pos, m.start), lang: "xml")
-    math.at(m.captures.first())
+  for m in xml.matches(regex("⟦(math-[0-9]+)⟧")) {
+    raw(xml.slice(pos, m.start), lang: "xml")
+    math-items.at(m.captures.first())
     pos = m.end
   }
-  raw(xml-str.slice(pos), lang: "xml")
+  raw(xml.slice(pos), lang: "xml")
 }
 
 // Renders as: `<p>An equation: ` + typeset x² + `</p>`

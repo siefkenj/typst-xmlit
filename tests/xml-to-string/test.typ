@@ -99,9 +99,9 @@
 // Pretty-printing composes with extract-math. Here <p>'s only child is the
 // <m> element (element-only, so it indents); <m> itself holds a text
 // sentinel (mixed, so it stays inline).
-#let (pretty-str, math) = xml-to-string(root(p[$x^2$]), pretty-print: true, extract-math: true)
+#let (xml: pretty-str, math-items) = xml-to-string(root(p[$x^2$]), pretty-print: true, extract-math: true)
 #assert.eq(pretty-str, "<root>\n  <p>\n    <m>⟦math-0⟧</m>\n  </p>\n</root>")
-#assert.eq(math.len(), 1)
+#assert.eq(math-items.len(), 1)
 
 #import "/src/lib.typ": to-xml, make-tag  // legacy API still importable
 #assert(type(make-tag) == function)
