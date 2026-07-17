@@ -33,9 +33,9 @@ Defined elements: #raw(repr(elements.keys())).
 
 == A valid document
 
-Composed with the generated constructors and rendered by
-`#show: utils.validate-and-render.with(pretty-print: true)` — which serializes the body, validates
-it against the grammar (panicking on any error), and shows the indented XML source.
+To validate and show a document, use
+`#show: utils.validate-and-render`, which serializes the body and validates
+it against the grammar (panicking on any error).
 
 #{
   // Validate the document and then render it
@@ -53,11 +53,8 @@ it against the grammar (panicking on any error), and shows the indented XML sour
 == Catching an invalid document
 
 `utils.validate` checks a document without panicking, returning `(valid, errors)`. Here the required
-`<title>` is missing before the ingredients. Each error also carries a `snippet` --- the same
-located, windowed source excerpt used in `validate-and-render`'s panic message. Since this document
-was authored directly (not passed as a raw XML string), there's no useful `line`/`column` to show ---
-those would be positions in an invisible, internally-generated XML string the user never wrote, so
-`validate` omits them here; the snippet already shows the real location:
+`<title>` is missing before the ingredients. Each error also carries a `snippet` showing the source
+in question.
 
 #let bad = recipe(serving: "2", {
   ingredient[Water]
@@ -75,6 +72,7 @@ those would be positions in an invisible, internally-generated XML string the us
     #for e in result.errors [
       - #e.message
         #if e.at("snippet", default: none) != none [
+          #set text(fill: red.darken(30%))
           #raw(e.snippet, block: true)
         ]
     ]

@@ -17,14 +17,16 @@
 #      src/relaxng/relaxng.wasm is up to date
 #   2. run the test suite (tests/run.sh: unit tests + expected-failure probes
 #      + example compilation)
-#   3. assemble the package (typst.toml, LICENSE, README.md, src/ — no
+#   3. render the showcase example(s) to committed PNGs the README embeds
+#      (examples/images/*.png)
+#   4. assemble the package (typst.toml, LICENSE, README.md, src/ — no
 #      tests/, plugin/, or *.test.typ files, matching `exclude` in
 #      typst.toml); the README's relative links (which only work when
 #      browsing this repo on GitHub) are rewritten to absolute permalinks
 #      against `repository` in typst.toml, pinned at --tag/--no-tag (see
 #      below), so the published README is portable to Typst Universe /
 #      typst/packages
-#   4. compile the tytanic test suite (imports rewritten to
+#   5. compile the tytanic test suite (imports rewritten to
 #      `@local/xmlit:<version>` in a scratch copy — tests aren't part of
 #      the published package) against the vendored package, to validate it
 #      works as advertised
@@ -128,6 +130,10 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 BLOB_BASE="$REPO_URL/blob/$GITHUB_REF"
 TREE_BASE="$REPO_URL/tree/$GITHUB_REF"
+# Images must resolve to the actual file bytes, not GitHub's HTML "blob" viewer
+# page, so <img src="..."> paths are rewritten to raw.githubusercontent.com
+# (the README embeds examples/images/*.png).
+RAW_BASE="https://raw.githubusercontent.com/${REPO_URL#https://github.com/}/$GITHUB_REF"
 
 echo "==> Building the RELAX NG WASM plugin"
 plugin/build.sh
@@ -136,6 +142,17 @@ echo "==> Running tests"
 # tests/run.sh compiles the unit tests, checks the expected-failure probes, and
 # compiles the examples.
 ./tests/run.sh
+
+echo "==> Rendering example screenshots for the README"
+# Render the showcase example(s) to committed PNGs the README embeds. Uses the
+# plugin built above (create-from-relaxng loads the bundled WASM); the example
+# is already known to compile, since the test run above compiles every
+# examples/*.typ. --ppi 150 keeps text crisp on high-DPI displays without
+# bloating the file. Commit the regenerated PNG alongside your other changes so
+# the raw-URL rewrite below (pinned to this commit/tag) resolves once pushed.
+mkdir -p examples/images
+typst compile --root . -f png --ppi 150 \
+    examples/create-from-relaxng.typ examples/images/create-from-relaxng.png
 
 echo "==> Assembling $PKG/"
 rm -rf dist
@@ -146,17 +163,21 @@ cp typst.toml LICENSE "$PKG/"
 # i.e. the rest of the file), drop the now-dangling link to it, and rewrite
 # repo-relative links so the README is portable outside GitHub — markdown
 # links `](path)` become blob links (or tree links for directory paths
-# ending in `/`). Absolute (`http...`), anchor (`#...`), and `mailto:`
-# targets are left untouched.
+# ending in `/`), and `<img src="...">` paths become raw.githubusercontent.com
+# links so the embedded screenshot loads. Absolute (`http...`), anchor
+# (`#...`), and `mailto:` targets are left untouched.
 awk '/^## Development$/ { skip = 1; next } skip && /^## / { skip = 0 } !skip' \
     README.md \
     | grep -v 'See \[Development\](#development)' \
-    | BLOB_BASE="$BLOB_BASE" TREE_BASE="$TREE_BASE" perl -pe '
+    | BLOB_BASE="$BLOB_BASE" TREE_BASE="$TREE_BASE" RAW_BASE="$RAW_BASE" perl -pe '
         s{\]\(([^)]+)\)}{
             my $p = $1;
             $p =~ m{^(?:https?:|#|mailto:)} ? "](" . $p . ")"
             : $p =~ m{/$} ? "](" . $ENV{TREE_BASE} . "/" . $p . ")"
             : "](" . $ENV{BLOB_BASE} . "/" . $p . ")"
+        }ge;
+        s{(<img\b[^>]*\bsrc=")([^"]+)(")}{
+            $2 =~ m{^https?:} ? "$1$2$3" : "$1" . $ENV{RAW_BASE} . "/$2" . "$3"
         }ge;
     ' >"$PKG/README.md"
 mkdir -p "$PKG/src"

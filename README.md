@@ -2,6 +2,15 @@
 
 Tools for generating, validating, and outputting XML using Typst syntax.
 
+<p align="center">
+  <img src="examples/images/create-from-relaxng.png" width="60%" alt="A Typst-rendered page: element constructors derived from a RELAX NG grammar, a valid document serialized to XML, a validation error with a located source snippet, and the same errors highlighted in place">
+</p>
+
+The page above is [examples/create-from-relaxng.typ](examples/create-from-relaxng.typ)
+rendered by Typst: it derives typechecked element constructors from a RELAX NG
+grammar, then validates and prints a document — pointing right at the mistakes
+in an invalid one.
+
 ## Authoring XML
 
 Create functions which return XML elements with `make-tag`/`make-tags`.
