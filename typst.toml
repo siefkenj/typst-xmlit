@@ -7,7 +7,7 @@ entrypoint = "src/lib.typ"
 authors = ["Jason Siefken <https://github.com/siefkenj>"]
 categories = ["utility"]
 license = "MIT"
-description = "Generate XML documents using Typst syntax, serialize, and validate with RelaxNG schemas."
+description = "Generate XML documents using native syntax, serialize, and validate with RelaxNG schemas."
 keywords = ["xml", "serialization", "markup", "relaxng", "relax-ng", "schema"],
 exclude = [
   "tests",

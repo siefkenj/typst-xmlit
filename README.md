@@ -177,7 +177,7 @@ The returned dictionary destructures into two entries:
     compilation with a readable panic that includes a small line-numbered
     snippet of the source around each error, not the whole document:
 
-    ```
+    ```text
     XML failed RELAX NG validation:
     - element <qux> is not allowed here. Expected element(s): bar.
         1 | <foo>
