@@ -92,15 +92,78 @@
 #assert.eq(with-math.children.first().tag, "m")
 #assert.eq(with-math.children.last().tag, "md")
 
-// The default math payload is an opaque placeholder; just check it is a
-// non-empty string (its exact form is unstable by design).
+// The default math payload is a best-effort Typst-flavored linear string.
 #let m-node = with-math.children.first()
-#assert.eq(m-node.children.len(), 1)
-#assert(type(m-node.children.first()) == str)
-#assert(m-node.children.first().len() > 0)
+#assert.eq(m-node.children, ("x^2",))
+#assert.eq(with-math.children.last().children, ("y",))
+
+// More of the default math serializer, via xml-to-string.
+#assert.eq(xml-to-string(foo[$x^10$]), "<foo><m>x^10</m></foo>")
+#assert.eq(xml-to-string(foo[$x^(a+1)$]), "<foo><m>x^(a+1)</m></foo>")
+#assert.eq(xml-to-string(foo[$1/2$]), "<foo><m>1/2</m></foo>")
+#assert.eq(xml-to-string(foo[$(x + 1)/2$]), "<foo><m>(x + 1)/2</m></foo>")
+#assert.eq(xml-to-string(foo[$sqrt(x + 1)$]), "<foo><m>sqrt(x + 1)</m></foo>")
+#assert.eq(xml-to-string(foo[$x'_1$]), "<foo><m>x'_1</m></foo>")
+#assert.eq(xml-to-string(foo[$a_(i j)$]), "<foo><m>a_(i j)</m></foo>")
+
+// The round-trip property for supported constructs: eval-ing the serialized
+// output reproduces the original expression exactly. This test list is the
+// enforcement of that property -- extend it alongside the serializer.
+#import "/src/lib.typ": math-to-string
+#let assert-round-trips(eq) = {
+  let s = math-to-string(eq.body)
+  assert.eq(
+    repr(eval("$" + s + "$").body),
+    repr(eq.body),
+    message: "did not round-trip: " + s,
+  )
+}
+#assert-round-trips($x^2$)
+#assert-round-trips($x^10 + 1.5$)
+#assert-round-trips($(x + 1)/2$)
+#assert-round-trips($sqrt(x + 1)$)
+#assert-round-trips($root(3, x)$)
+#assert-round-trips($pi r^2$)
+#assert-round-trips($x'' _1$)
+#assert-round-trips($e^(i pi) = -1$)
+#assert-round-trips($x dif x$)
+#assert-round-trips($integral_0^1 x^2 dif x$)
+#assert-round-trips($lim_(x -> 0) (sin x)/x$)
+#assert-round-trips($"hello world" + x$)
+#assert-round-trips($f(x, y)$)
+#assert-round-trips($abs(x)$)
+
+// Unsupported constructs (matrices, cases, ...) do NOT panic; they degrade
+// to a repr fallback, which is visible but not valid math source.
+#let degraded = xml-to-string(foo[$mat(1, 2; 3, 4)$])
+#assert(degraded.starts-with("<foo><m>"))
+#assert(degraded.contains("mat("))
+
+// --- extract-math ----------------------------------------------------------------
+
+// Default serialization is unchanged by the reserved `math` key.
+#assert.eq(xml-to-string(foo[$x^2$]), "<foo><m>x^2</m></foo>")
+
+// extract-math returns (xml, math-items): text sentinels in the string, and
+// the actual equation content keyed by id in document order (nested included).
+#let (xml, math-items) = xml-to-string(foo[$x^2$ and $ y $ #bar[nested $z$]], extract-math: true)
+#assert.eq(
+  xml,
+  "<foo><m>⟦math-0⟧</m> and <md>⟦math-1⟧</md> <bar>nested <m>⟦math-2⟧</m></bar></foo>",
+)
+#assert.eq(math-items.len(), 3)
+#assert.eq(repr(math-items.at("math-0")), repr($x^2$))
+#assert.eq(repr(math-items.at("math-1")), repr($ y $))
+#assert.eq(repr(math-items.at("math-2")), repr($z$))
+
+// The extracted equations are real, renderable content: they can be measured.
+#context {
+  let size = measure(math-items.at("math-0"))
+  assert(size.width > 0pt and size.height > 0pt)
+}
 
 // A custom "math" handler replaces the placeholder.
-#let mfoo = make-tag("foo", handlers: ("math": (body, ctx) => ("MATH",)))
+#let mfoo = make-tag("foo", handlers: ("math": (body, convert, ctx) => ("MATH",)))
 #assert.eq(
   xml-to-string(mfoo[$x^2$]),
   "<foo><m>MATH</m></foo>",
@@ -111,7 +174,7 @@
 // Override a built-in mapping: strong -> <alert>.
 #let afoo = make-tag(
   "foo",
-  handlers: ("strong": (c, ctx) => ((tag: "alert", attrs: (:), children: (ctx.convert)(c.body)),)),
+  handlers: ("strong": (c, convert, ctx) => ((tag: "alert", attrs: (:), children: convert(c.body)),)),
 )
 #assert.eq(
   xml-to-string(afoo[*bold*]),
@@ -121,7 +184,7 @@
 // make-tags forwards handlers to every created tag.
 #let (hfoo, hbar) = make-tags(
   "foo", "bar",
-  handlers: ("math": (body, ctx) => ("M",)),
+  handlers: ("math": (body, convert, ctx) => ("M",)),
 )
 #assert.eq(xml-to-string(hfoo(hbar[$x$])), "<foo><bar><m>M</m></bar></foo>")
 

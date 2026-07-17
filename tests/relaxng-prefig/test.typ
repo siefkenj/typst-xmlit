@@ -6,17 +6,18 @@
 
 #import "/src/lib.typ": create-from-relaxng, elem
 
-#let made = create-from-relaxng(read("/tests/grammars/pf_schema.rnc"))
+#let (utils, elements) = create-from-relaxng(read("/tests/grammars/pf_schema.rnc"))
 
 // --- Factory shape -----------------------------------------------------------
 
-#assert.eq(made.roots, ("diagram",))
-#assert(made.elements.len() > 50)
+#assert.eq(utils.roots, ("diagram",))
+#assert(elements.len() > 50)
 #for name in ("diagram", "coordinates", "circle", "point", "line", "grid", "label", "caption") {
-  assert(name in made.elements, message: "missing element: " + name)
+  assert(name in elements, message: "missing element: " + name)
 }
 
-#let (root, validate, diagram, coordinates, circle, point, line, grid, caption) = made
+#let (validate-and-render, validate) = utils
+#let (diagram, coordinates, circle, point, line, grid, caption) = elements
 
 // --- Valid documents ----------------------------------------------------------
 
@@ -63,6 +64,6 @@
 // Unknown attribute.
 #assert(not validate(diagram(dimensions: "(300, 300)", zap: "1")).valid)
 
-// --- root template ----------------------------------------------------------------
+// --- validate-and-render template --------------------------------------------------
 
-#assert.eq(type(root(diagram(dimensions: "(300, 300)"))), content)
+#assert.eq(type(validate-and-render(diagram(dimensions: "(300, 300)"))), content)
