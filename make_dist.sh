@@ -165,11 +165,14 @@ cp typst.toml LICENSE "$PKG/"
 # links `](path)` become blob links (or tree links for directory paths
 # ending in `/`), and `<img src="...">` paths become raw.githubusercontent.com
 # links so the embedded screenshot loads. Absolute (`http...`), anchor
-# (`#...`), and `mailto:` targets are left untouched.
+# (`#...`), and `mailto:` targets are left untouched. The `@preview/xmlit:<v>`
+# version in the doc's import examples is pinned to this build's version, so
+# the published README always advertises the version it actually ships (the
+# source README keeps a literal placeholder that doesn't churn on every bump).
 awk '/^## Development$/ { skip = 1; next } skip && /^## / { skip = 0 } !skip' \
     README.md \
     | grep -v 'See \[Development\](#development)' \
-    | BLOB_BASE="$BLOB_BASE" TREE_BASE="$TREE_BASE" RAW_BASE="$RAW_BASE" perl -pe '
+    | BLOB_BASE="$BLOB_BASE" TREE_BASE="$TREE_BASE" RAW_BASE="$RAW_BASE" VERSION="$VERSION" perl -pe '
         s{\]\(([^)]+)\)}{
             my $p = $1;
             $p =~ m{^(?:https?:|#|mailto:)} ? "](" . $p . ")"
@@ -179,6 +182,7 @@ awk '/^## Development$/ { skip = 1; next } skip && /^## / { skip = 0 } !skip' \
         s{(<img\b[^>]*\bsrc=")([^"]+)(")}{
             $2 =~ m{^https?:} ? "$1$2$3" : "$1" . $ENV{RAW_BASE} . "/$2" . "$3"
         }ge;
+        s{(\@preview/xmlit:)[\w.+-]+}{$1 . $ENV{VERSION}}ge;
     ' >"$PKG/README.md"
 mkdir -p "$PKG/src"
 (cd src && find . -type f ! -name '*.test.typ') | while IFS= read -r f; do
